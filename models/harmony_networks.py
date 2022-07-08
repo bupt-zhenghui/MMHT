@@ -22,6 +22,8 @@ def define_G(netG='retinex',init_type='normal', init_gain=0.02, opt=None):
         net = HTGenerator(opt)
     elif netG == 'DHT':
         net = DHTGenerator(opt)
+    elif netG == 'MMHT':
+        net = MMHTGenerator(opt)
     else:
         raise NotImplementedError('Generator model name [%s] is not recognized' % netG)
     net = networks_init.init_weights(net, init_type, init_gain)
@@ -94,19 +96,71 @@ class DHTGenerator(nn.Module):
 
         reflectance = reflectance.permute(1, 2, 0).view(bs, c, h, w)
         reflectance = self.reflectance_dec(reflectance)
-        reflectance = reflectance / 2 +0.5
+        reflectance = reflectance / 2 + 0.5
 
         illumination = illumination.permute(1, 2, 0).view(bs, c, h, w)
         illumination = self.illumination_dec(illumination)
         illumination = illumination / 2 + 0.5
-        
-        harmonized = reflectance*illumination
+
+        harmonized = reflectance * illumination
+        return harmonized, reflectance, illumination
+
+
+class MMHTGenerator(nn.Module):
+    def __init__(self, opt=None):
+        super(MMHTGenerator, self).__init__()
+        self.reflectance_dim = 256
+        self.device = opt.device
+        self.reflectance_enc = ContentEncoder(opt.n_downsample, 0, opt.input_nc + 1, self.reflectance_dim, opt.ngf,
+                                              'in', opt.activ, pad_type=opt.pad_type)
+        self.reflectance_dec = ContentDecoder(opt.n_downsample, 0, self.reflectance_enc.output_dim, opt.output_nc,
+                                              opt.ngf, 'ln', opt.activ, pad_type=opt.pad_type)
+
+        self.reflectance_transformer_enc = transformer.TransformerEncoders(self.reflectance_dim,
+                                                                           nhead=opt.tr_r_enc_head,
+                                                                           num_encoder_layers=opt.tr_r_enc_layers,
+                                                                           dim_feedforward=self.reflectance_dim * opt.dim_forward,
+                                                                           activation=opt.tr_act)
+
+        self.light_generator = GlobalLighting(light_element=opt.light_element, light_mlp_dim=self.reflectance_dim,
+                                              opt=opt)
+        self.illumination_render = transformer.TransformerDecoders(self.reflectance_dim, nhead=opt.tr_i_dec_head,
+                                                                   num_decoder_layers=opt.tr_i_dec_layers,
+                                                                   dim_feedforward=self.reflectance_dim * opt.dim_forward,
+                                                                   activation=opt.tr_act)
+        self.illumination_dec = ContentDecoder(opt.n_downsample, 0, self.reflectance_dim, opt.output_nc, opt.ngf, 'ln',
+                                               opt.activ, pad_type=opt.pad_type)
+        self.opt = opt
+
+    def forward(self, inputs=None, image=None, pixel_pos=None, patch_pos=None, mask_r=None, mask=None,
+                fg=None, layers=[], encode_only=False):
+        print('fg shape: ', fg.shape)
+        r_content = self.reflectance_enc(inputs)
+        bs, c, h, w = r_content.size()
+
+        reflectance = self.reflectance_transformer_enc(r_content.flatten(2).permute(2, 0, 1), src_pos=pixel_pos,
+                                                       src_key_padding_mask=None)
+
+        light_code, light_embed = self.light_generator(image, pos=patch_pos, mask=mask,
+                                                       use_mask=self.opt.light_use_mask)
+        illumination = self.illumination_render(light_code, reflectance, src_pos=light_embed, tgt_pos=pixel_pos,
+                                                src_key_padding_mask=None, tgt_key_padding_mask=None)
+
+        reflectance = reflectance.permute(1, 2, 0).view(bs, c, h, w)
+        reflectance = self.reflectance_dec(reflectance)
+        reflectance = reflectance / 2 + 0.5
+
+        illumination = illumination.permute(1, 2, 0).view(bs, c, h, w)
+        illumination = self.illumination_dec(illumination)
+        illumination = illumination / 2 + 0.5
+
+        harmonized = reflectance * illumination
         return harmonized, reflectance, illumination
 
 
 class GlobalLighting(nn.Module):
     def __init__(self, light_element=27, light_mlp_dim=8, norm=None, activ=None, pad_type='zero', opt=None):
-    
+
         super(GlobalLighting, self).__init__()
         self.light_with_tre = opt.light_with_tre
 

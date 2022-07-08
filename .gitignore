@@ -31,3 +31,5 @@ beyond/inpainting/src/model/__pycache__/rcb_layer.cpython-37.pyc
 beyond/inpainting/src/model/__pycache__/reshape.cpython-37.pyc
 beyond/inpainting/src/model/__pycache__/reSPADE.cpython-37.pyc
 beyond/inpainting/src/model/__pycache__/transformer.cpython-37.pyc
+tmp.py
+.idea/*
