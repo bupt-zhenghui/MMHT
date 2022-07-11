@@ -48,6 +48,10 @@ class mmhtModel(BaseModel):
         b = self.opt.batch_size
         self.pixel_pos = pos.unsqueeze(0).repeat(b, 1, 1, 1).to(self.device)
         self.pixel_pos = self.pixel_pos.flatten(2).permute(2, 0, 1)
+
+        clip_pos = torch.zeros((50, b, 256))
+        self.pixel_pos = torch.cat([clip_pos, self.pixel_pos], 0)
+
         self.patch_pos = patch_pos.unsqueeze(0).repeat(b, 1, 1, 1).to(self.device)
         self.patch_pos = self.patch_pos.flatten(2).permute(2, 0, 1)
 

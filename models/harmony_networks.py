@@ -149,17 +149,14 @@ class MMHTGenerator(nn.Module):
         r_content = self.reflectance_enc(inputs)
         bs, c, h, w = r_content.size()
 
-        clip_pos = torch.zeros((50, bs, 256))
-
         enc_input = torch.cat([fg_feature, r_content.flatten(2).permute(2, 0, 1)], 0)  # (4096+50, bs, 256)
-        reflectance = self.reflectance_transformer_enc(enc_input, src_pos=torch.cat([clip_pos, pixel_pos], 0),
+        reflectance = self.reflectance_transformer_enc(enc_input, src_pos=pixel_pos,
                                                        src_key_padding_mask=None)
 
         light_code, light_embed = self.light_generator(image, pos=patch_pos, mask=mask,
                                                        use_mask=self.opt.light_use_mask)
         illumination = self.illumination_render(light_code, reflectance, src_pos=light_embed,
-                                                tgt_pos=torch.cat([clip_pos, pixel_pos], 0),
-                                                src_key_padding_mask=None, tgt_key_padding_mask=None)
+                                                tgt_pos=pixel_pos, src_key_padding_mask=None, tgt_key_padding_mask=None)
 
         reflectance = reflectance[50:].permute(1, 2, 0).view(bs, c, h, w)
         reflectance = self.reflectance_dec(reflectance)
