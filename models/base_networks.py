@@ -211,7 +211,8 @@ def build_model(cfg, model, gpu_id=None):
         # Make model replica operate on the current device
         #,  find_unused_parameters=True
         model = torch.nn.parallel.DistributedDataParallel(
-            module=model, device_ids=[cur_device], output_device=cur_device
+            module=model, device_ids=[cur_device], output_device=cur_device,
+            find_unused_parameters=True
         )
     
     return model
