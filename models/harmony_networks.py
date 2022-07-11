@@ -144,7 +144,7 @@ class MMHTGenerator(nn.Module):
     def forward(self, inputs=None, image=None, pixel_pos=None, patch_pos=None, mask_r=None, mask=None,
                 fg=None, layers=[], encode_only=False):
         fg_feature = self.clip_model.encode_image(fg)
-        fg_feature = self.clip_linear(fg_feature).permute(1, 0, 2)
+        fg_feature = self.clip_linear(fg_feature.float()).permute(1, 0, 2)
 
         r_content = self.reflectance_enc(inputs)
         bs, c, h, w = r_content.size()
