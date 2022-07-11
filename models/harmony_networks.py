@@ -12,8 +12,10 @@ from util import util
 from . import base_networks as networks_init
 from . import transformer
 import math
+import clip
 
-def define_G(netG='retinex',init_type='normal', init_gain=0.02, opt=None):
+
+def define_G(netG='retinex', init_type='normal', init_gain=0.02, opt=None):
     """Create a generator
     """
     if netG == 'CNNHT':
@@ -111,6 +113,13 @@ class MMHTGenerator(nn.Module):
         super(MMHTGenerator, self).__init__()
         self.reflectance_dim = 256
         self.device = opt.device
+
+        self.clip_model, _ = clip.load("ViT-B/32")
+        self.clip_linear = nn.Sequential(
+            nn.Linear(512, 256),
+            nn.ReLU()
+        )
+
         self.reflectance_enc = ContentEncoder(opt.n_downsample, 0, opt.input_nc + 1, self.reflectance_dim, opt.ngf,
                                               'in', opt.activ, pad_type=opt.pad_type)
         self.reflectance_dec = ContentDecoder(opt.n_downsample, 0, self.reflectance_enc.output_dim, opt.output_nc,
@@ -134,23 +143,29 @@ class MMHTGenerator(nn.Module):
 
     def forward(self, inputs=None, image=None, pixel_pos=None, patch_pos=None, mask_r=None, mask=None,
                 fg=None, layers=[], encode_only=False):
-        print('fg shape: ', fg.shape)
+        fg_feature = self.clip_model.encode_image(fg)
+        fg_feature = self.clip_linear(fg_feature).permute(1, 0, 2)
+
         r_content = self.reflectance_enc(inputs)
         bs, c, h, w = r_content.size()
 
-        reflectance = self.reflectance_transformer_enc(r_content.flatten(2).permute(2, 0, 1), src_pos=pixel_pos,
+        clip_pos = torch.zeros((50, bs, 256))
+
+        enc_input = torch.cat([fg_feature, r_content.flatten(2).permute(2, 0, 1)], 0)  # (4096+50, bs, 256)
+        reflectance = self.reflectance_transformer_enc(enc_input, src_pos=torch.cat([clip_pos, pixel_pos], 0),
                                                        src_key_padding_mask=None)
 
         light_code, light_embed = self.light_generator(image, pos=patch_pos, mask=mask,
                                                        use_mask=self.opt.light_use_mask)
-        illumination = self.illumination_render(light_code, reflectance, src_pos=light_embed, tgt_pos=pixel_pos,
+        illumination = self.illumination_render(light_code, reflectance, src_pos=light_embed,
+                                                tgt_pos=torch.cat([clip_pos, pixel_pos], 0),
                                                 src_key_padding_mask=None, tgt_key_padding_mask=None)
 
-        reflectance = reflectance.permute(1, 2, 0).view(bs, c, h, w)
+        reflectance = reflectance[50:].permute(1, 2, 0).view(bs, c, h, w)
         reflectance = self.reflectance_dec(reflectance)
         reflectance = reflectance / 2 + 0.5
 
-        illumination = illumination.permute(1, 2, 0).view(bs, c, h, w)
+        illumination = illumination[50:].permute(1, 2, 0).view(bs, c, h, w)
         illumination = self.illumination_dec(illumination)
         illumination = illumination / 2 + 0.5
 
@@ -196,6 +211,7 @@ class GlobalLighting(nn.Module):
             input_patch = self.transformer_enc(input_patch, src_pos=pos, src_key_padding_mask=src_key_padding_mask)
         light = self.transformer_dec(input_patch, tgt, src_pos=pos, tgt_pos=light_embed, src_key_padding_mask=src_key_padding_mask, tgt_key_padding_mask=None)        
         return light, light_embed
+
 
 class ContentEncoder(nn.Module):
     def __init__(self, n_downsample, n_res, input_dim, output_dim, dim, norm, activ, pad_type):
