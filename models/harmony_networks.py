@@ -230,6 +230,7 @@ class ContentEncoder(nn.Module):
     def forward(self, x):
         return self.model(x)
 
+
 class ContentDecoder(nn.Module):
     def __init__(self, n_downsample, n_res, input_dim, output_dim, dim, norm, activ, pad_type):
         super(ContentDecoder, self).__init__()

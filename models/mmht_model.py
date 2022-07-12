@@ -40,11 +40,33 @@ class mmhtModel(BaseModel):
             # define loss functions
             self.criterionL1 = torch.nn.L1Loss()
             self.criterionL2 = torch.nn.MSELoss()
-            # initialize optimizers; schedulers will be automatically created by function <BaseModel.setup>.
-            for param in self.netG.module.clip_model.parameters():
-                param.requires_grad = False
 
-            self.optimizer_G = torch.optim.Adam(self.netG.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
+            # initialize optimizers; schedulers will be automatically created by function <BaseModel.setup>.
+            # for param in self.netG.module.clip_model.parameters():
+            #     param.requires_grad = False
+
+            def get_group_parameters():
+                params = list(self.netG.named_parameters())
+                clip_param = [p for n, p in params if 'clip_model' in n]
+                base_param = [p for n, p in params if 'clip_model' not in n]
+
+                # clip_param_name = [n for n, p in params if 'clip_model' in n]
+                # base_param_name = [n for n, p in params if 'clip_model' not in n]
+                # total_param_name = [n for n, _ in self.netG.named_parameters()]
+                # print('clip param num:', len(clip_param_name), clip_param_name[:3])
+                # print('base param num:', len(base_param_name), base_param_name[:3])
+                # print('total param num:', len(total_param_name))
+                # exit()
+
+                param_group = [
+                    {'params': clip_param, 'lr': 0.0},
+                    {'params': base_param, 'lr': opt.lr},
+                ]
+                return param_group
+
+            self.optimizer_G = torch.optim.Adam(get_group_parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
+
+            # self.optimizer_G = torch.optim.Adam(self.netG.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
             self.optimizers.append(self.optimizer_G)
 
     def set_position(self, pos, patch_pos=None):
