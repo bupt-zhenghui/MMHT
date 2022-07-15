@@ -641,7 +641,7 @@ def calc_mask_mean_std(feat,mask, eps=1e-5, is_expland=False):
     # feat_mean = feat.view(N, C, -1).mean(dim=2).view(N, C, 1, 1)
     feat_mask = feat*mask
     feat_mask_sum = feat_mask.view(N, C, -1).sum(dim=2)
-    mask_pixel_sum = mask.view(mask.size(0), mask.size(1), -1).sum(dim=2)  + eps
+    mask_pixel_sum = mask.view(mask.size(0), mask.size(1), -1).sum(dim=2) + eps
     feat_mask_mean = feat_mask_sum.div(mask_pixel_sum).view(N, C, 1, 1)
     feat_normal = feat_mask + feat_mask_mean.expand_as(feat_mask)*(1-mask)    #mask region pixel value=mean value
     feat_mask_var = feat_normal.view(N, C, -1).var(dim=2)*(H*W/mask_pixel_sum) + eps
@@ -651,6 +651,7 @@ def calc_mask_mean_std(feat,mask, eps=1e-5, is_expland=False):
         feat_mask_std = feat_mask_std.expand_as(feat)
     return feat_mask_mean, feat_mask_std
 
+
 def PositionEmbeddingSine(opt):
     temperature=10000
     feature_h = opt.crop_size//2**opt.n_downsample
@@ -658,25 +659,39 @@ def PositionEmbeddingSine(opt):
     mask = torch.ones((feature_h, feature_h))
     y_embed = mask.cumsum(0, dtype=torch.float32)
     x_embed = mask.cumsum(1, dtype=torch.float32)
+
     # if self.normalize:
     #     eps = 1e-6
     #     y_embed = y_embed / (y_embed[:, -1:, :] + eps) * self.scale
     #     x_embed = x_embed / (x_embed[:, :, -1:] + eps) * self.scale
 
     dim_t = torch.arange(num_pos_feats, dtype=torch.float32)
-    dim_t = temperature ** (2 * (dim_t // 2) / num_pos_feats)
+    dim_t = temperature ** (2 * torch.div(dim_t, 2, rounding_mode='floor') / num_pos_feats)
 
     pos_x = x_embed[:, :, None] / dim_t
     pos_y = y_embed[:, :, None] / dim_t
+
     pos_x = torch.stack((pos_x[:, :, 0::2].sin(), pos_x[:, :, 1::2].cos()), dim=3).flatten(2)
     pos_y = torch.stack((pos_y[:, :, 0::2].sin(), pos_y[:, :, 1::2].cos()), dim=3).flatten(2)
     pos = torch.cat((pos_y, pos_x), dim=2).permute(2, 0, 1)
     return pos
 
+
+def ClipPositionEmbeddingSine():
+    temperature, feature_num, num_pos_feats = 10000, 50, 256
+    mask = torch.ones(feature_num)
+    x_embed = mask.cumsum(0, dtype=torch.float32)
+    dim_t = torch.arange(num_pos_feats, dtype=torch.float32)
+    dim_t = temperature ** (2 * torch.div(dim_t, 2, rounding_mode='floor') / num_pos_feats)
+    pos_x = x_embed[:, None] / dim_t
+    pos_x = torch.stack((pos_x[:, 0::2].sin(), pos_x[:, 1::2].cos()), dim=2).flatten(1)
+    return pos_x  # (50, 256)
+
+
 def PatchPositionEmbeddingSine(opt):
-    temperature=10000
-    feature_h = 256//8
-    num_pos_feats = 8*8*opt.patch_pos_nc//2
+    temperature = 10000
+    feature_h = 256 // 8
+    num_pos_feats = 8 * 8 * opt.patch_pos_nc // 2
     mask = torch.ones((feature_h, feature_h))
     y_embed = mask.cumsum(0, dtype=torch.float32)
     x_embed = mask.cumsum(1, dtype=torch.float32)
@@ -686,7 +701,7 @@ def PatchPositionEmbeddingSine(opt):
     #     x_embed = x_embed / (x_embed[:, :, -1:] + eps) * self.scale
 
     dim_t = torch.arange(num_pos_feats, dtype=torch.float32)
-    dim_t = temperature ** (2 * (dim_t // 2) / num_pos_feats)
+    dim_t = temperature ** (2 * torch.div(dim_t, 2, rounding_mode='floor') / num_pos_feats)
 
     pos_x = x_embed[:, :, None] / dim_t
     pos_y = y_embed[:, :, None] / dim_t

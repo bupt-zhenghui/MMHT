@@ -42,9 +42,6 @@ class mmhtModel(BaseModel):
             self.criterionL2 = torch.nn.MSELoss()
 
             # initialize optimizers; schedulers will be automatically created by function <BaseModel.setup>.
-            # for param in self.netG.module.clip_model.parameters():
-            #     param.requires_grad = False
-
             def get_group_parameters():
                 params = list(self.netG.named_parameters())
                 clip_param = [p for n, p in params if 'clip_model' in n]
@@ -66,6 +63,9 @@ class mmhtModel(BaseModel):
 
             self.optimizer_G = torch.optim.Adam(get_group_parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
 
+            # Code below is normal without learning rate problem.
+            # for param in self.netG.module.clip_model.parameters():
+            #     param.requires_grad = False
             # self.optimizer_G = torch.optim.Adam(self.netG.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
             self.optimizers.append(self.optimizer_G)
 
@@ -73,9 +73,13 @@ class mmhtModel(BaseModel):
         b = self.opt.batch_size
         self.pixel_pos = pos.unsqueeze(0).repeat(b, 1, 1, 1).to(self.device)
         self.pixel_pos = self.pixel_pos.flatten(2).permute(2, 0, 1)
+        print('pixel shape:', self.pixel_pos.shape)
 
-        clip_pos = torch.zeros((50, b, 256)).to(self.device)
+        clip_pos = util.ClipPositionEmbeddingSine().unsqueeze(0).repeat(b, 1, 1).permute(1, 0, 2).to(self.device)
+        print('clip_pos shape:', clip_pos.shape)
+        # clip_pos = torch.zeros((50, b, 256)).to(self.device)
         self.pixel_pos = torch.cat([clip_pos, self.pixel_pos], 0)
+        print('after concat pixel_pos shape:', self.pixel_pos.shape)
 
         self.patch_pos = patch_pos.unsqueeze(0).repeat(b, 1, 1, 1).to(self.device)
         self.patch_pos = self.patch_pos.flatten(2).permute(2, 0, 1)
