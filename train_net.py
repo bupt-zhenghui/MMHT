@@ -35,12 +35,10 @@ def train(cfg):
     dataset_size = len(dataset)  # get the number of images in the dataset.
     print('The number of training images = %d' % dataset_size)
     postion_embedding = util.PositionEmbeddingSine(cfg)
-    # exit()
 
     patch_pos = util.PatchPositionEmbeddingSine(cfg)
     model = create_model(cfg)  # create a model given cfg.model and other options
     model.set_position(postion_embedding, patch_pos=patch_pos)
-    exit()
     # model.setup(cfg)               # regular setup: load and print networks; create schedulers
 
     visualizer = Visualizer(cfg)  # create a visualizer that display/save images and plots
