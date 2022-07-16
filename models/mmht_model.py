@@ -56,7 +56,7 @@ class mmhtModel(BaseModel):
                 # exit()
 
                 param_group = [
-                    {'params': clip_param, 'lr': 0.0},
+                    {'params': clip_param, 'lr': 0.0001 * opt.lr},
                     {'params': base_param, 'lr': opt.lr},
                 ]
                 return param_group

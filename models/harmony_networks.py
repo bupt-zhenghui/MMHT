@@ -114,7 +114,16 @@ class MMHTGenerator(nn.Module):
         self.reflectance_dim = 256
         self.device = opt.device
 
-        self.clip_model, _ = clip.load("ViT-B/32")
+        self.clip_model, _ = clip.load("ViT-B/32", jit=False)
+
+        def convert_models_to_fp32(model):
+            for p in model.parameters():
+                p.data = p.data.float()
+                if p.grad:
+                    p.grad.data = p.grad.data.float()
+
+        convert_models_to_fp32(self.clip_model)
+
         self.clip_linear = nn.Sequential(
             nn.Linear(512, 256),
             nn.ReLU()
