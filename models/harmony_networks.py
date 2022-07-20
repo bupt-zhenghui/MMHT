@@ -121,11 +121,11 @@ class MMHTGenerator(nn.Module):
         self.reflectance_dec = ContentDecoder(opt.n_downsample, 0, self.reflectance_enc.output_dim, opt.output_nc,
                                               opt.ngf, 'ln', opt.activ, pad_type=opt.pad_type)
 
-        self.reflectance_transformer_enc = transformer.TransformerEncoders(self.reflectance_dim,
-                                                                           nhead=opt.tr_r_enc_head,
-                                                                           num_encoder_layers=opt.tr_r_enc_layers,
-                                                                           dim_feedforward=self.reflectance_dim * opt.dim_forward,
-                                                                           activation=opt.tr_act)
+        # self.reflectance_transformer_enc = transformer.TransformerEncoders(self.reflectance_dim,
+        #                                                                    nhead=opt.tr_r_enc_head,
+        #                                                                    num_encoder_layers=opt.tr_r_enc_layers,
+        #                                                                    dim_feedforward=self.reflectance_dim * opt.dim_forward,
+        #                                                                    activation=opt.tr_act)
 
         self.reflectance_transformer_dec = transformer.TransformerDecoders(self.reflectance_dim,
                                                                            nhead=opt.tr_i_dec_head,
