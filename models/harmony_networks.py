@@ -114,20 +114,7 @@ class MMHTGenerator(nn.Module):
         self.reflectance_dim = 256
         self.device = opt.device
 
-        self.clip_model, _ = clip.load("ViT-B/32", jit=False)
-
-        def convert_models_to_fp32(model):
-            for p in model.parameters():
-                p.data = p.data.float()
-                if p.grad:
-                    p.grad.data = p.grad.data.float()
-
-        convert_models_to_fp32(self.clip_model)
-
-        self.clip_linear = nn.Sequential(
-            nn.Linear(512, 256),
-            nn.ReLU()
-        )
+        self.clip_generator = ClipFeature()
 
         self.reflectance_enc = ContentEncoder(opt.n_downsample, 0, opt.input_nc + 1, self.reflectance_dim, opt.ngf,
                                               'in', opt.activ, pad_type=opt.pad_type)
@@ -137,6 +124,12 @@ class MMHTGenerator(nn.Module):
         self.reflectance_transformer_enc = transformer.TransformerEncoders(self.reflectance_dim,
                                                                            nhead=opt.tr_r_enc_head,
                                                                            num_encoder_layers=opt.tr_r_enc_layers,
+                                                                           dim_feedforward=self.reflectance_dim * opt.dim_forward,
+                                                                           activation=opt.tr_act)
+
+        self.reflectance_transformer_dec = transformer.TransformerDecoders(self.reflectance_dim,
+                                                                           nhead=opt.tr_i_dec_head,
+                                                                           num_decoder_layers=opt.tr_i_dec_layers,
                                                                            dim_feedforward=self.reflectance_dim * opt.dim_forward,
                                                                            activation=opt.tr_act)
 
@@ -152,31 +145,59 @@ class MMHTGenerator(nn.Module):
 
     def forward(self, inputs=None, image=None, pixel_pos=None, patch_pos=None, mask_r=None, mask=None,
                 fg=None, layers=[], encode_only=False):
-        fg_feature = self.clip_model.encode_image(fg)
-        fg_feature = self.clip_linear(fg_feature.float()).permute(1, 0, 2)
+        fg_feature, clip_embed = self.clip_generator(fg)
 
         r_content = self.reflectance_enc(inputs)
         bs, c, h, w = r_content.size()
+        r_content = r_content.flatten(2).permute(2, 0, 1)
 
-        enc_input = torch.cat([fg_feature, r_content.flatten(2).permute(2, 0, 1)], 0)  # (4096+50, bs, 256)
-        reflectance = self.reflectance_transformer_enc(enc_input, src_pos=pixel_pos,
-                                                       src_key_padding_mask=None)
+        reflectance = self.reflectance_transformer_dec(fg_feature, r_content, src_pos=clip_embed,
+                                                       tgt_pos=pixel_pos, src_key_padding_mask=None,
+                                                       tgt_key_padding_mask=None)
 
         light_code, light_embed = self.light_generator(image, pos=patch_pos, mask=mask,
                                                        use_mask=self.opt.light_use_mask)
+
         illumination = self.illumination_render(light_code, reflectance, src_pos=light_embed,
                                                 tgt_pos=pixel_pos, src_key_padding_mask=None, tgt_key_padding_mask=None)
 
-        reflectance = reflectance[50:].permute(1, 2, 0).view(bs, c, h, w)
+        reflectance = reflectance.permute(1, 2, 0).view(bs, c, h, w)
         reflectance = self.reflectance_dec(reflectance)
         reflectance = reflectance / 2 + 0.5
 
-        illumination = illumination[50:].permute(1, 2, 0).view(bs, c, h, w)
+        illumination = illumination.permute(1, 2, 0).view(bs, c, h, w)
         illumination = self.illumination_dec(illumination)
         illumination = illumination / 2 + 0.5
 
         harmonized = reflectance * illumination
         return harmonized, reflectance, illumination
+
+
+class ClipFeature(nn.Module):
+    def __init__(self, light_element=50, dim=256):
+        super(ClipFeature, self).__init__()
+        self.clip_model, _ = clip.load("ViT-B/32", jit=False)
+
+        def convert_models_to_fp32(model):
+            for p in model.parameters():
+                p.data = p.data.float()
+                if p.grad:
+                    p.grad.data = p.grad.data.float()
+
+        convert_models_to_fp32(self.clip_model)
+
+        self.clip_linear = nn.Sequential(
+            nn.Linear(512, dim),
+            nn.ReLU()
+        )
+        self.clip_embed = nn.Embedding(light_element, dim)
+
+    def forward(self, fg_img):
+        fg_feature = self.clip_model.encode_image(fg_img)
+        fg_feature = self.clip_linear(fg_feature.float()).permute(1, 0, 2)
+        _, b, _ = fg_feature.shape
+        clip_embed = self.clip_embed.weight.unsqueeze(1).repeat(1, b, 1)
+        return fg_feature, clip_embed
 
 
 class GlobalLighting(nn.Module):
