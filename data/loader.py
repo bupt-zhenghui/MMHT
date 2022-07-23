@@ -50,6 +50,8 @@ def construct_loader(cfg, split, is_precise_bn=False):
         shuffle = False
         drop_last = False
 
+    drop_last = True
+    
     # Construct the dataset
     dataset = build_dataset(dataset_name, cfg, split)
 
