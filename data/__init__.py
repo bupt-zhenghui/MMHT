@@ -80,7 +80,7 @@ def create_dataset(opt):
         shuffle=(False if sampler else shuffle),
         sampler=sampler,
         num_workers=int(opt.num_threads),
-        drop_last=drop_last,
+        drop_last=True,
         pin_memory=True,
     )
     return dataloader
