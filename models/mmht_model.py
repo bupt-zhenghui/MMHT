@@ -61,12 +61,12 @@ class mmhtModel(BaseModel):
                 ]
                 return param_group
 
-            self.optimizer_G = torch.optim.Adam(get_group_parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
+            # self.optimizer_G = torch.optim.Adam(get_group_parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
 
             # Code below is normal without learning rate problem.
-            # for param in self.netG.module.clip_model.parameters():
-            #     param.requires_grad = False
-            # self.optimizer_G = torch.optim.Adam(self.netG.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
+            for param in self.netG.clip_generator.parameters():
+                param.requires_grad = False
+            self.optimizer_G = torch.optim.Adam(self.netG.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
             self.optimizers.append(self.optimizer_G)
 
     def set_position(self, pos, patch_pos=None):
@@ -92,6 +92,7 @@ class mmhtModel(BaseModel):
         self.mask_r = F.interpolate(self.mask, size=[64, 64])
         self.revert_mask = 1 - self.mask
         self.fg = input['fg'].to(self.device)
+        self.comp_feat = input['comp_feat'].to(self.device)
 
     def data_dependent_initialize(self, data):
         pass
@@ -103,7 +104,7 @@ class mmhtModel(BaseModel):
                                                                          pixel_pos=self.pixel_pos.detach(),
                                                                          patch_pos=self.patch_pos.detach(),
                                                                          mask_r=self.mask_r, mask=self.mask,
-                                                                         fg=self.fg)
+                                                                         fg=self.fg, comp_feat=self.comp_feat)
         if not self.isTrain:
             self.harmonized = self.comp * (1 - self.mask) + self.harmonized * self.mask
 

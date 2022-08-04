@@ -111,6 +111,7 @@ class MMIhdDataset(BaseDataset):
 
         fg = scripts.crop_foreground(comp, mask)
         fg_feature = self.preprocess(fg)
+        comp_feature = self.preprocess(comp)
 
         if np.random.rand() > 0.5 and self.isTrain:
             comp, mask, real = tf.hflip(comp), tf.hflip(mask), tf.hflip(real)
@@ -132,7 +133,8 @@ class MMIhdDataset(BaseDataset):
         inputs = torch.cat([comp, mask], 0)
 
         return {'inputs': inputs, 'comp': comp, 'real': real,
-                'img_path': path, 'mask': mask, 'fg': fg_feature}
+                'img_path': path, 'mask': mask,
+                'fg': fg_feature, 'comp_feat': comp_feature}
 
     def __len__(self):
         """Return the total number of images."""
