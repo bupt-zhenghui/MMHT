@@ -64,7 +64,7 @@ class mmhtModel(BaseModel):
             # self.optimizer_G = torch.optim.Adam(get_group_parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
 
             # Code below is normal without learning rate problem.
-            for param in self.netG.clip_generator.parameters():
+            for param in self.netG.module.clip_generator.parameters():
                 param.requires_grad = False
             self.optimizer_G = torch.optim.Adam(self.netG.parameters(), lr=opt.lr, betas=(opt.beta1, 0.999))
             self.optimizers.append(self.optimizer_G)
