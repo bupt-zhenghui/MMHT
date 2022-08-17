@@ -145,13 +145,13 @@ class MMHTGenerator(nn.Module):
 
     def forward(self, inputs=None, image=None, pixel_pos=None, patch_pos=None, mask_r=None, mask=None,
                 fg=None, comp_feat=None, layers=[], encode_only=False):
-        fg_feature, clip_embed = self.clip_generator(fg, comp_feat)
+        fg_feature = self.clip_generator(fg, comp_feat)
 
         r_content = self.reflectance_enc(inputs)
         bs, c, h, w = r_content.size()
         r_content = r_content.flatten(2).permute(2, 0, 1)
 
-        reflectance = self.reflectance_transformer_dec(fg_feature, r_content, src_pos=clip_embed,
+        reflectance = self.reflectance_transformer_dec(fg_feature, r_content, src_pos=None,
                                                        tgt_pos=pixel_pos, src_key_padding_mask=None,
                                                        tgt_key_padding_mask=None)
 
@@ -180,13 +180,13 @@ class ClipFeature(nn.Module):
         super(ClipFeature, self).__init__()
         self.clip_model, _ = clip.load("ViT-B/32", jit=False)
 
-        def convert_models_to_fp32(model):
-            for p in model.parameters():
-                p.data = p.data.float()
-                if p.grad:
-                    p.grad.data = p.grad.data.float()
-
-        convert_models_to_fp32(self.clip_model)
+        # def convert_models_to_fp32(model):
+        #     for p in model.parameters():
+        #         p.data = p.data.float()
+        #         if p.grad:
+        #             p.grad.data = p.grad.data.float()
+        #
+        # convert_models_to_fp32(self.clip_model)
 
         self.clip_linear = nn.Sequential(
             nn.Linear(512, dim),
@@ -199,17 +199,11 @@ class ClipFeature(nn.Module):
         fg_feature = self.clip_linear(fg_feature.float()).permute(1, 0, 2)
 
         # print('comp_feat shape:', comp_feat.shape)
-        # comp_feature = self.clip_model.encode_image(comp_feat)
-        # comp_feature = self.clip_linear(comp_feature.float().permute(1, 0, 2))
-        #
-        # fg_feature = torch.cat([fg_feature, comp_feature], 0)
-        #
-        # print('fg_feature shape:', fg_feature.shape)
-        # print('comp_feature shape:', comp_feature.shape)
+        comp_feature = self.clip_model.encode_image(comp_feat)
+        comp_feature = self.clip_linear(comp_feature.float().permute(1, 0, 2))
 
-        _, b, _ = fg_feature.shape
-        clip_embed = self.clip_embed.weight.unsqueeze(1).repeat(1, b, 1)
-        return fg_feature, clip_embed
+        fg_feature = torch.cat([fg_feature, comp_feature], 0)
+        return fg_feature
 
 
 class GlobalLighting(nn.Module):
