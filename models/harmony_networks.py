@@ -133,14 +133,14 @@ class MMHTGenerator(nn.Module):
                                                                            dim_feedforward=self.reflectance_dim * opt.dim_forward,
                                                                            activation=opt.tr_act)
 
-        # self.light_generator = GlobalLighting(light_element=opt.light_element, light_mlp_dim=self.reflectance_dim,
-        #                                       opt=opt)
-        # self.illumination_render = transformer.TransformerDecoders(self.reflectance_dim, nhead=opt.tr_i_dec_head,
-        #                                                            num_decoder_layers=opt.tr_i_dec_layers,
-        #                                                            dim_feedforward=self.reflectance_dim * opt.dim_forward,
-        #                                                            activation=opt.tr_act)
-        # self.illumination_dec = ContentDecoder(opt.n_downsample, 0, self.reflectance_dim, opt.output_nc, opt.ngf, 'ln',
-        #                                        opt.activ, pad_type=opt.pad_type)
+        self.light_generator = GlobalLighting(light_element=opt.light_element, light_mlp_dim=self.reflectance_dim,
+                                              opt=opt)
+        self.illumination_render = transformer.TransformerDecoders(self.reflectance_dim, nhead=opt.tr_i_dec_head,
+                                                                   num_decoder_layers=opt.tr_i_dec_layers,
+                                                                   dim_feedforward=self.reflectance_dim * opt.dim_forward,
+                                                                   activation=opt.tr_act)
+        self.illumination_dec = ContentDecoder(opt.n_downsample, 0, self.reflectance_dim, opt.output_nc, opt.ngf, 'ln',
+                                               opt.activ, pad_type=opt.pad_type)
         self.opt = opt
 
     def forward(self, inputs=None, image=None, pixel_pos=None, patch_pos=None, mask_r=None, mask=None,
@@ -155,24 +155,22 @@ class MMHTGenerator(nn.Module):
                                                        tgt_pos=pixel_pos, src_key_padding_mask=None,
                                                        tgt_key_padding_mask=None)
 
-        # light_code, light_embed = self.light_generator(image, pos=patch_pos, mask=mask,
-        #                                                use_mask=self.opt.light_use_mask)
-        #
-        # illumination = self.illumination_render(light_code, reflectance, src_pos=light_embed,
-        #                                         tgt_pos=pixel_pos, src_key_padding_mask=None, tgt_key_padding_mask=None)
+        light_code, light_embed = self.light_generator(image, pos=patch_pos, mask=mask,
+                                                       use_mask=self.opt.light_use_mask)
+
+        illumination = self.illumination_render(light_code, reflectance, src_pos=light_embed,
+                                                tgt_pos=pixel_pos, src_key_padding_mask=None, tgt_key_padding_mask=None)
 
         reflectance = reflectance.permute(1, 2, 0).view(bs, c, h, w)
         reflectance = self.reflectance_dec(reflectance)
-        # reflectance = reflectance / 2 + 0.5
-        #
-        # illumination = illumination.permute(1, 2, 0).view(bs, c, h, w)
-        # illumination = self.illumination_dec(illumination)
-        # illumination = illumination / 2 + 0.5
-        #
-        # harmonized = reflectance * illumination
-        # return harmonized, reflectance, illumination
+        reflectance = reflectance / 2 + 0.5
 
-        return reflectance, reflectance, reflectance
+        illumination = illumination.permute(1, 2, 0).view(bs, c, h, w)
+        illumination = self.illumination_dec(illumination)
+        illumination = illumination / 2 + 0.5
+
+        harmonized = reflectance * illumination
+        return harmonized, reflectance, illumination
 
 
 class ClipFeature(nn.Module):
@@ -195,6 +193,7 @@ class ClipFeature(nn.Module):
         self.clip_embed = nn.Embedding(light_element, dim)
 
     def forward(self, fg_img, comp_feat):
+        self.clip_model.eval()
         fg_feature = self.clip_model.encode_image(fg_img)
         fg_feature = self.clip_linear(fg_feature.float()).permute(1, 0, 2)
 
