@@ -1,5 +1,6 @@
 import os
 import time
+import datetime
 from collections import OrderedDict
 
 import numpy as np
@@ -7,6 +8,7 @@ import torch
 import torch.nn.parallel
 import torch.utils.data
 import torch.utils.data.distributed
+from tensorboardX import SummaryWriter
 
 from data import create_dataset
 from data import shuffle_dataset
@@ -24,6 +26,10 @@ def train(cfg):
     # Set random seed from configs.
     np.random.seed(cfg.RNG_SEED)
     torch.manual_seed(cfg.RNG_SEED)
+
+    board_dir = './tensorboard'
+    date = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    writer = SummaryWriter(logdir=os.path.join(board_dir, date + '-' + cfg.name))
 
     # init dataset
     dataset = create_dataset(cfg)  # create a dataset given cfg.dataset_mode and other options
@@ -48,6 +54,7 @@ def train(cfg):
             iter_data_time = time.time()  # timer for data loading per iteration
         epoch_iter = 0  # the number of training iterations in current epoch, reset to 0 every epoch
         shuffle_dataset(dataset, epoch)
+        losses = None
         for i, data in enumerate(dataset):  # inner loop within one epoch
             if is_master:
                 iter_start_time = time.time()  # timer for computation per iteration
@@ -90,6 +97,8 @@ def train(cfg):
             print('End of epoch %d / %d \t Time Taken: %d sec' % (
                 epoch, cfg.niter + cfg.niter_decay, time.time() - epoch_start_time))
         model.update_learning_rate()  # update learning rates at the end of every epoch.
+        for k, v in losses.items():
+            writer.add_scalar(f'data/loss_{k}', v, epoch)
 
 
 def test(cfg):
