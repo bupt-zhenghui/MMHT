@@ -7,6 +7,8 @@ __pycache__/distribute.cpython-37.pyc
 __pycache__/options.cpython-37.pyc
 __pycache__/train_net.cpython-37.pyc
 __pycache__/train.cpython-37.pyc
+__pychche__/*
+tensorboard/*
 heatmaps/*
 beyond/inpainting/checkpoints/paris-fcin-deconvout-2H6L/g.pth_600000
 beyond/inpainting/src/__pycache__/AEN.cpython-37.pyc
