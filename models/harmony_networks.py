@@ -121,17 +121,17 @@ class MMHTGenerator(nn.Module):
         self.reflectance_dec = ContentDecoder(opt.n_downsample, 0, self.reflectance_enc.output_dim, opt.output_nc,
                                               opt.ngf, 'ln', opt.activ, pad_type=opt.pad_type)
 
-        # self.reflectance_transformer_enc = transformer.TransformerEncoders(self.reflectance_dim,
-        #                                                                    nhead=opt.tr_r_enc_head,
-        #                                                                    num_encoder_layers=opt.tr_r_enc_layers,
-        #                                                                    dim_feedforward=self.reflectance_dim * opt.dim_forward,
-        #                                                                    activation=opt.tr_act)
-
-        self.reflectance_transformer_dec = transformer.TransformerDecoders(self.reflectance_dim,
-                                                                           nhead=opt.tr_i_dec_head,
-                                                                           num_decoder_layers=opt.tr_i_dec_layers,
+        self.reflectance_transformer_enc = transformer.TransformerEncoders(self.reflectance_dim,
+                                                                           nhead=opt.tr_r_enc_head,
+                                                                           num_encoder_layers=opt.tr_r_enc_layers,
                                                                            dim_feedforward=self.reflectance_dim * opt.dim_forward,
                                                                            activation=opt.tr_act)
+
+        # self.reflectance_transformer_enc = transformer.TransformerDecoders(self.reflectance_dim,
+        #                                                                    nhead=opt.tr_i_dec_head,
+        #                                                                    num_decoder_layers=opt.tr_i_dec_layers,
+        #                                                                    dim_feedforward=self.reflectance_dim * opt.dim_forward,
+        #                                                                    activation=opt.tr_act)
 
         self.light_generator = GlobalLighting(light_element=opt.light_element, light_mlp_dim=self.reflectance_dim,
                                               opt=opt)
@@ -145,15 +145,18 @@ class MMHTGenerator(nn.Module):
 
     def forward(self, inputs=None, image=None, pixel_pos=None, patch_pos=None, mask_r=None, mask=None,
                 fg=None, comp_feat=None, layers=[], encode_only=False):
-        fg_feature = self.clip_generator(fg, comp_feat)
+        # fg_feature = self.clip_generator(fg, comp_feat)
 
         r_content = self.reflectance_enc(inputs)
         bs, c, h, w = r_content.size()
         r_content = r_content.flatten(2).permute(2, 0, 1)
 
-        reflectance = self.reflectance_transformer_dec(fg_feature, r_content, src_pos=None,
-                                                       tgt_pos=pixel_pos, src_key_padding_mask=None,
-                                                       tgt_key_padding_mask=None)
+        reflectance = self.reflectance_transformer_enc(r_content, src_pos=pixel_pos,
+                                                       src_key_padding_mask=None)
+
+        # reflectance = self.reflectance_transformer_enc(fg_feature, r_content, src_pos=None,
+        #                                                tgt_pos=pixel_pos, src_key_padding_mask=None,
+        #                                                tgt_key_padding_mask=None)
 
         light_code, light_embed = self.light_generator(image, pos=patch_pos, mask=mask,
                                                        use_mask=self.opt.light_use_mask)
